@@ -26,6 +26,7 @@ func main() {
 	var (
 		listenAddr   = flag.String("web.listen-address", ":9502", "The address to listen on for HTTP requests.")
 		inverterAddr = flag.String("inverter.addr", "localhost:502", "The IP address of the PV invester.")
+		pollInterval = flag.Int("inverter.poll-interval", 5, "Interval in seconds between polls.")
 		slaveId      = flag.Int("inverter.slave-id", 3, "The modbus slave ID to use")
 		showVersion  = flag.Bool("version", false, "Print version information and exit.")
 	)
@@ -111,7 +112,7 @@ func main() {
 			}
 			pvTotalWatts.Set(float64(binary.BigEndian.Uint32(results)))
 
-			time.Sleep(1)
+			time.Sleep(time.Duration(*pollInterval) * time.Second)
 		}
 	}()
 
