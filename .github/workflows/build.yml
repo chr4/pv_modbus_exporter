@@ -1,0 +1,84 @@
+name: build
+
+on:
+  push:
+    tags:
+      - 'v*' # Build tagged releases
+
+jobs:
+  build-linux-amd64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build
+        run: |
+          go build
+          tar -czf pv_modbus_exporter.tar.gz pv_modbus_exporter
+      - name: Upload
+        uses: actions/upload-artifact@v2
+        with:
+          name: release-linux-amd64
+          path: pv_modbus_exporter.tar.gz
+
+  build-linux-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build
+        run: |
+          GOARCH=arm64 GOOS=linux go build
+          tar -czf pv_modbus_exporter.tar.gz pv_modbus_exporter
+      - name: Upload
+        uses: actions/upload-artifact@v2
+        with:
+          name: release-linux-arm64
+          path: pv_modbus_exporter.tar.gz
+
+  release:
+    needs: [build-linux-amd64, build-linux-arm64]
+    name: Upload Release Assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all releases
+        uses: actions/download-artifact@v2
+        with:
+          path: ./
+
+      - name: Get version
+        id: get_version
+        run: echo ::set-output name=VERSION::${GITHUB_REF#refs/tags/v}
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Linux amd64 release
+        id: upload-linux-amd64-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./release-linux-amd64/pv_modbus_exporter.tar.gz
+          asset_name: pv_modbus_exporter-${{ steps.get_version.outputs.VERSION }}-linux-amd64.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Linux arm64 release
+        id: upload-linux-arm64-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./release-linux-arm64/pv_modbus_exporter.tar.gz
+          asset_name: pv_modbus_exporter-${{ steps.get_version.outputs.VERSION }}-linux-arm64.tar.gz
+          asset_content_type: application/gzip
