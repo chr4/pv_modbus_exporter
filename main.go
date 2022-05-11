@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -64,53 +65,53 @@ func main() {
 	// Add Go module build info
 	prometheus.MustRegister(collectors.NewBuildInfoCollector())
 
-	// Establish inverter modbus connection
-	handler := modbus.NewTCPClientHandler(*inverterAddr)
-	handler.SlaveId = byte(*slaveId)
-	err := handler.Connect()
-	if err != nil {
-		log.Printf("Error: %s", err)
-		return
-	}
-
-	defer handler.Close()
-
-	client := modbus.NewClient(handler)
-
 	// Poll inverter values
 	go func() {
+
+		// Establish inverter modbus connection
+		handler := modbus.NewTCPClientHandler(*inverterAddr)
+		handler.SlaveId = byte(*slaveId)
+		err := handler.Connect()
+		if err != nil {
+			log.Printf("Error: %s", err)
+			return // TODO: exit program instead
+		}
+
+		defer handler.Close()
+		client := modbus.NewClient(handler)
+
 		for {
 			// Daily yield
-			results, err := client.ReadInputRegisters(30517, 4)
-			if err != nil {
+			res, err := readRegisters(client, 30517, 4)
+			if err == nil {
+				pvDailyYield.Set(res)
+			} else {
 				log.Printf("Error: %s", err)
-				return
 			}
-			pvDailyYield.Set(float64(binary.BigEndian.Uint64(results)))
 
 			// MPPT1
-			results, err = client.ReadInputRegisters(30773, 2)
-			if err != nil {
+			res, err = readRegisters(client, 30773, 2)
+			if err == nil {
+				pvMppt1Watts.Set(res)
+			} else {
 				log.Printf("Error: %s", err)
-				return
 			}
-			pvMppt1Watts.Set(float64(binary.BigEndian.Uint32(results)))
 
 			// MPPT2
-			results, err = client.ReadInputRegisters(30961, 2)
-			if err != nil {
+			res, err = readRegisters(client, 30961, 2)
+			if err == nil {
+				pvMppt2Watts.Set(res)
+			} else {
 				log.Printf("Error: %s", err)
-				return
 			}
-			pvMppt2Watts.Set(float64(binary.BigEndian.Uint32(results)))
 
 			// Total
-			results, err = client.ReadInputRegisters(30775, 2)
-			if err != nil {
+			res, err = readRegisters(client, 30775, 2)
+			if err == nil {
+				pvTotalWatts.Set(res)
+			} else {
 				log.Printf("Error: %s", err)
-				return
 			}
-			pvTotalWatts.Set(float64(binary.BigEndian.Uint32(results)))
 
 			time.Sleep(time.Duration(*pollInterval) * time.Second)
 		}
@@ -122,4 +123,28 @@ func main() {
 		promhttp.HandlerOpts{},
 	))
 	log.Fatal(http.ListenAndServe(*listenAddr, nil))
+}
+
+func readRegisters(client modbus.Client, no uint16, size uint16) (float64, error) {
+	results, err := client.ReadInputRegisters(no, size)
+	if err != nil {
+		return 0, err
+	}
+
+	switch size {
+	case 4:
+		return float64(binary.BigEndian.Uint64(results)), nil
+	case 2:
+		// Ugly hack: Instead of no value or zero, result contains [128 0 0 0], resp. 2147483648
+		res := binary.BigEndian.Uint32(results)
+		if res == 2147483648 {
+			return float64(0), nil
+		} else {
+			return float64(res), nil
+		}
+	case 1:
+		return float64(binary.BigEndian.Uint16(results)), nil
+	default:
+		return 0, errors.New("Error: Invalid size")
+	}
 }
