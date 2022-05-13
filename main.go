@@ -19,7 +19,7 @@ import (
 )
 
 func init() {
-	promVersion.Version = "0.1.0"
+	promVersion.Version = "0.1.1"
 	prometheus.MustRegister(promVersion.NewCollector("pv_modbus_exporter"))
 }
 
