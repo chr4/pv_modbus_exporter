@@ -68,52 +68,55 @@ func main() {
 	// Poll inverter values
 	go func() {
 
-		// Establish inverter modbus connection
-		handler := modbus.NewTCPClientHandler(*inverterAddr)
-		handler.SlaveId = byte(*slaveId)
-		err := handler.Connect()
-		if err != nil {
-			log.Printf("Error: %s", err)
-			return // TODO: exit program instead
-		}
-
-		defer handler.Close()
-		client := modbus.NewClient(handler)
-
+	outer:
 		for {
-			// Daily yield
-			res, err := readRegisters(client, 30517, 4)
-			if err == nil {
-				pvDailyYield.Set(res)
-			} else {
-				log.Printf("Error: %s", err)
-			}
-
-			// MPPT1
-			res, err = readRegisters(client, 30773, 2)
-			if err == nil {
-				pvMppt1Watts.Set(res)
-			} else {
-				log.Printf("Error: %s", err)
-			}
-
-			// MPPT2
-			res, err = readRegisters(client, 30961, 2)
-			if err == nil {
-				pvMppt2Watts.Set(res)
-			} else {
-				log.Printf("Error: %s", err)
-			}
-
-			// Total
-			res, err = readRegisters(client, 30775, 2)
-			if err == nil {
-				pvTotalWatts.Set(res)
-			} else {
-				log.Printf("Error: %s", err)
-			}
-
 			time.Sleep(time.Duration(*pollInterval) * time.Second)
+
+			// Establish inverter modbus connection
+			handler := modbus.NewTCPClientHandler(*inverterAddr)
+			handler.SlaveId = byte(*slaveId)
+			err := handler.Connect()
+			if err != nil {
+				log.Printf("Error: %s", err)
+				continue
+			}
+
+			defer handler.Close()
+			client := modbus.NewClient(handler)
+
+			for {
+				// Daily yield
+				res, err := readRegisters(client, 30517, 4)
+				if err != nil {
+					log.Printf("Error: %s", err)
+					continue outer
+				}
+				pvDailyYield.Set(res)
+
+				// MPPT1
+				res, err = readRegisters(client, 30773, 2)
+				if err != nil {
+					log.Printf("Error: %s", err)
+					continue outer
+				}
+				pvMppt1Watts.Set(res)
+
+				// MPPT2
+				res, err = readRegisters(client, 30961, 2)
+				if err != nil {
+					log.Printf("Error: %s", err)
+					continue outer
+				}
+				pvMppt2Watts.Set(res)
+
+				// Total
+				res, err = readRegisters(client, 30775, 2)
+				if err != nil {
+					log.Printf("Error: %s", err)
+					continue outer
+				}
+				pvTotalWatts.Set(res)
+			}
 		}
 	}()
 
