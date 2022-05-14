@@ -68,7 +68,6 @@ func main() {
 	// Poll inverter values
 	go func() {
 
-	outer:
 		for {
 			time.Sleep(time.Duration(*pollInterval) * time.Second)
 
@@ -89,7 +88,7 @@ func main() {
 				res, err := readRegisters(client, 30517, 4)
 				if err != nil {
 					log.Printf("Error: %s", err)
-					continue outer
+					break
 				}
 				pvDailyYield.Set(res)
 
@@ -97,7 +96,7 @@ func main() {
 				res, err = readRegisters(client, 30773, 2)
 				if err != nil {
 					log.Printf("Error: %s", err)
-					continue outer
+					break
 				}
 				pvMppt1Watts.Set(res)
 
@@ -105,7 +104,7 @@ func main() {
 				res, err = readRegisters(client, 30961, 2)
 				if err != nil {
 					log.Printf("Error: %s", err)
-					continue outer
+					break
 				}
 				pvMppt2Watts.Set(res)
 
@@ -113,7 +112,7 @@ func main() {
 				res, err = readRegisters(client, 30775, 2)
 				if err != nil {
 					log.Printf("Error: %s", err)
-					continue outer
+					break
 				}
 				pvTotalWatts.Set(res)
 			}
