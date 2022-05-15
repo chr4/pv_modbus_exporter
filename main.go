@@ -68,54 +68,52 @@ func main() {
 	// Poll inverter values
 	go func() {
 
-		for {
-			time.Sleep(time.Duration(*pollInterval) * time.Second)
+		// Establish inverter modbus connection
+		handler := modbus.NewTCPClientHandler(*inverterAddr)
+		handler.SlaveId = byte(*slaveId)
+		err := handler.Connect()
+		if err != nil {
+			log.Printf("Error: %s", err)
+			os.Exit(1)
+		}
 
-			// Establish inverter modbus connection
-			handler := modbus.NewTCPClientHandler(*inverterAddr)
-			handler.SlaveId = byte(*slaveId)
-			err := handler.Connect()
+		defer handler.Close()
+		client := modbus.NewClient(handler)
+
+		for {
+			// Daily yield
+			res, err := readRegisters(client, 30517, 4)
 			if err != nil {
 				log.Printf("Error: %s", err)
-				continue
+				os.Exit(1)
 			}
+			pvDailyYield.Set(res)
 
-			defer handler.Close()
-			client := modbus.NewClient(handler)
-
-			for {
-				// Daily yield
-				res, err := readRegisters(client, 30517, 4)
-				if err != nil {
-					log.Printf("Error: %s", err)
-					break
-				}
-				pvDailyYield.Set(res)
-
-				// MPPT1
-				res, err = readRegisters(client, 30773, 2)
-				if err != nil {
-					log.Printf("Error: %s", err)
-					break
-				}
-				pvMppt1Watts.Set(res)
-
-				// MPPT2
-				res, err = readRegisters(client, 30961, 2)
-				if err != nil {
-					log.Printf("Error: %s", err)
-					break
-				}
-				pvMppt2Watts.Set(res)
-
-				// Total
-				res, err = readRegisters(client, 30775, 2)
-				if err != nil {
-					log.Printf("Error: %s", err)
-					break
-				}
-				pvTotalWatts.Set(res)
+			// MPPT1
+			res, err = readRegisters(client, 30773, 2)
+			if err != nil {
+				log.Printf("Error: %s", err)
+				os.Exit(1)
 			}
+			pvMppt1Watts.Set(res)
+
+			// MPPT2
+			res, err = readRegisters(client, 30961, 2)
+			if err != nil {
+				log.Printf("Error: %s", err)
+				os.Exit(1)
+			}
+			pvMppt2Watts.Set(res)
+
+			// Total
+			res, err = readRegisters(client, 30775, 2)
+			if err != nil {
+				log.Printf("Error: %s", err)
+				os.Exit(1)
+			}
+			pvTotalWatts.Set(res)
+
+			time.Sleep(time.Duration(*pollInterval) * time.Second)
 		}
 	}()
 
